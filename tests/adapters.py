@@ -19,6 +19,7 @@ from cs336_basics.swiGLU import SwiGLU
 from cs336_basics.softmax import softmax
 from cs336_basics.cross_entropy import cross_entropy
 from cs336_basics.attention import scaled_dot_product_attention
+from cs336_basics.rope import RotaryPositionalEmbedding
 
 
 def run_linear(
@@ -218,18 +219,21 @@ def run_rope(
     token_positions: Int[Tensor, " ... sequence_length"],
 ) -> Float[Tensor, " ... sequence_length d_k"]:
     """
-    Run RoPE for a given input tensor.
+    对给定的输入张量应用 RoPE（旋转位置编码）。
 
-    Args:
-        d_k (int): Embedding dimension size for the query or key tensor.
-        theta (float): RoPE parameter.
-        max_seq_len (int): Maximum sequence length to pre-cache if your implementation does that.
-        in_query_or_key (Float[Tensor, "... sequence_length d_k"]): Input tensor to run RoPE on.
-        token_positions (Int[Tensor, "... sequence_length"]): Tensor of shape (batch_size, sequence_length) with the token positions
-    Returns:
-        Float[Tensor, " ... sequence_length d_k"]: Tensor with RoPEd input.
+    参数：
+        d_k (int)：Query 或 Key 张量的嵌入维度大小。
+        theta (float)：RoPE 的参数。
+        max_seq_len (int)：如果你的实现会预先缓存（pre-cache）RoPE 所需的值，则表示预缓存的最大序列长度。
+        in_query_or_key (Float[Tensor, "... sequence_length d_k"])：需要应用 RoPE 的输入张量（Query 或 Key）。
+        token_positions (Int[Tensor, "... sequence_length"])：表示各个 token 位置的张量，形状为 (batch_size, sequence_length)。
+
+    返回：
+        Float[Tensor, "... sequence_length d_k"]：应用了 RoPE 后的输出张量。
     """
-    raise NotImplementedError
+
+    rotary_positional_embedding = RotaryPositionalEmbedding(theta, d_k, max_seq_len)
+    return rotary_positional_embedding(in_query_or_key, token_positions)
 
 
 def run_transformer_block(
