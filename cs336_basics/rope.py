@@ -16,6 +16,7 @@ class RotaryPositionalEmbedding(nn.Module):
         angles = torch.outer(pos, inv_freq) # 两个一维向量，做外积操作，(max_seq_len, d_k/2)
 
         # step 3: 由 angles 预计算 cos / sin，并用 register_buffer 缓存（非可学习参数）
+        # 用register的意义是：会把数据缓存到显卡上，减少了后续的数据搬运
         self.register_buffer("cos_cached", torch.cos(angles), persistent=False) # (max_seq_len, d_k/2)
         self.register_buffer("sin_cached", torch.sin(angles), persistent=False) # (max_seq_len, d_k/2)
     

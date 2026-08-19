@@ -20,6 +20,7 @@ from cs336_basics.softmax import softmax
 from cs336_basics.cross_entropy import cross_entropy
 from cs336_basics.attention import scaled_dot_product_attention
 from cs336_basics.rope import RotaryPositionalEmbedding
+from cs336_basics.multi_head_self_attention import MultiHeadSelfAttention
 
 
 def run_linear(
@@ -147,28 +148,56 @@ def run_multihead_self_attention(
     in_features: Float[Tensor, " ... sequence_length d_model"],
 ) -> Float[Tensor, " ... sequence_length d_model"]:
     """
-    Given the key, query, and value projection weights of a naive unbatched
-    implementation of multi-head attention, return the output of an optimized batched
-    implementation. This implementation should handle the key, query, and value projections
-    for all heads in a single matrix multiply.
-    This function should not use RoPE.
-    See section 3.2.2 of Vaswani et al., 2017.
+    给定一个朴素（naive）、无 batch（unbatched）实现的多头注意力（Multi-Head Attention）中的
+    Key、Query 和 Value 投影权重，返回一个经过优化的、支持 batch 的多头注意力实现的输出。
 
-    Args:
-        d_model (int): Dimensionality of the feedforward input and output.
-        num_heads (int): Number of heads to use in multi-headed attention.
-        max_seq_len (int): Maximum sequence length to pre-cache if your implementation does that.
-        q_proj_weight (Float[Tensor, "d_model d_model"]): Weights for the Q projection
-        k_proj_weight (Float[Tensor, "d_model d_model"]): Weights for the K projection
-        v_proj_weight (Float[Tensor, "d_model d_model"]): Weights for the V projection
-        o_proj_weight (Float[Tensor, "d_model d_model"]): Weights for the output projection
-        in_features (Float[Tensor, "... sequence_length d_model"]): Tensor to run your implementation on.
+    该实现应当在一次矩阵乘法中同时完成所有注意力头（heads）的
+    Key、Query 和 Value 投影，而不是分别对每个头单独计算。
 
-    Returns:
-        Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
-        implementation with the given QKV projection weights and input features.
+    本函数**不需要使用 RoPE（Rotary Positional Embedding）**。
+
+    可参考 Vaswani 等人在 2017 年论文《Attention Is All You Need》的第 3.2.2 节。
+
+    参数：
+        d_model (int):
+            输入和输出特征的维度（模型隐藏层维度）。
+
+        num_heads (int):
+            多头注意力中使用的注意力头数量。
+
+        max_seq_len (int):
+            最大序列长度。如果你的实现会预先缓存（pre-cache）某些数据，则缓存到该长度即可。
+
+        q_proj_weight (Float[Tensor, "d_model d_model"]):
+            Query（Q）投影矩阵的权重。
+
+        k_proj_weight (Float[Tensor, "d_model d_model"]):
+            Key（K）投影矩阵的权重。
+
+        v_proj_weight (Float[Tensor, "d_model d_model"]):
+            Value（V）投影矩阵的权重。
+
+        o_proj_weight (Float[Tensor, "d_model d_model"]):
+            输出投影（Output Projection）矩阵的权重。
+
+        in_features (Float[Tensor, "... sequence_length d_model"]):
+            输入特征张量，即需要送入多头注意力计算的数据。
+
+    返回：
+        Float[Tensor, "... sequence_length d_model"]:
+            使用给定的 Q、K、V 投影权重和输入特征，
+            经过优化后的、支持 batch 的多头注意力实现计算得到的输出张量。
     """
-    raise NotImplementedError
+    multi_head_self_attention = MultiHeadSelfAttention(
+        d_model=d_model, 
+        num_heads=num_heads,
+    )
+    multi_head_self_attention.q_proj.weight.data = q_proj_weight
+    multi_head_self_attention.k_proj.weight.data = k_proj_weight
+    multi_head_self_attention.v_proj.weight.data = v_proj_weight
+    multi_head_self_attention.o_proj.weight.data = o_proj_weight
+
+    return multi_head_self_attention(in_features) 
 
 
 def run_multihead_self_attention_with_rope(
@@ -184,31 +213,71 @@ def run_multihead_self_attention_with_rope(
     token_positions: Int[Tensor, " ... sequence_length"] | None = None,
 ) -> Float[Tensor, " ... sequence_length d_model"]:
     """
-    Given the key, query, and value projection weights of a naive unbatched
-    implementation of multi-head attention, return the output of an optimized batched
-    implementation. This implementation should handle the key, query, and value projections
-    for all heads in a single matrix multiply.
-    This version of MHA should include RoPE.
-    In this case, the RoPE embedding dimension must be the head embedding dimension (d_model // num_heads).
-    See section 3.2.2 of Vaswani et al., 2017.
+    给定一个朴素（naive）、无 batch（unbatched）实现的多头注意力（Multi-Head Attention）中的
+    Key、Query 和 Value 投影权重，返回一个经过优化的、支持 batch 的多头注意力实现的输出。
 
-    Args:
-        d_model (int): Dimensionality of the feedforward input and output.
-        num_heads (int): Number of heads to use in multi-headed attention.
-        max_seq_len (int): Maximum sequence length to pre-cache if your implementation does that.
-        theta (float): RoPE parameter.
-        q_proj_weight (Float[Tensor, "d_model d_model"]): Weights for the Q projection
-        k_proj_weight (Float[Tensor, "d_model d_model"]): Weights for the K projection
-        v_proj_weight (Float[Tensor, "d_model d_model"]): Weights for the V projection
-        o_proj_weight (Float[Tensor, "d_model d_model"]): Weights for the output projection
-        in_features (Float[Tensor, "... sequence_length d_model"]): Tensor to run your implementation on.
-        token_positions (Int[Tensor, " ... sequence_length"] | None): Optional tensor with the positions of the tokens
+    该实现应当在一次矩阵乘法中同时完成所有注意力头（heads）的
+    Key、Query 和 Value 投影，而不是分别对每个头单独计算。
 
-    Returns:
-        Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
-        implementation with the given QKV projection weights and input features.
+    **本版本的多头注意力（MHA）需要包含 RoPE（Rotary Positional Embedding）。**
+
+    在本实现中，**RoPE 的嵌入维度必须等于每个注意力头的维度**，即：
+
+        d_head = d_model // num_heads
+
+    可参考 Vaswani 等人在 2017 年论文《Attention Is All You Need》的第 3.2.2 节。
+
+    参数：
+        d_model (int):
+            模型的隐藏层维度，即输入和输出特征的维度。
+
+        num_heads (int):
+            多头注意力中使用的注意力头数量。
+
+        max_seq_len (int):
+            最大序列长度。如果你的实现会预先缓存（pre-cache）某些数据，则缓存到该长度即可。
+
+        theta (float):
+            RoPE 的参数 θ，用于控制旋转位置编码的频率。
+
+        q_proj_weight (Float[Tensor, "d_model d_model"]):
+            Query（Q）投影矩阵的权重。
+
+        k_proj_weight (Float[Tensor, "d_model d_model"]):
+            Key（K）投影矩阵的权重。
+
+        v_proj_weight (Float[Tensor, "d_model d_model"]):
+            Value（V）投影矩阵的权重。
+
+        o_proj_weight (Float[Tensor, "d_model d_model"]):
+            输出投影（Output Projection）矩阵的权重。
+
+        in_features (Float[Tensor, "... sequence_length d_model"]):
+            输入特征张量，即需要送入多头注意力计算的数据。
+
+        token_positions (Int[Tensor, "... sequence_length"] | None):
+            （可选）表示每个 token 在序列中的位置的张量。
+            如果为 None，则通常默认使用连续的位置索引（如 0, 1, 2, ...）。
+
+    返回：
+        Float[Tensor, "... sequence_length d_model"]:
+            使用给定的 Q、K、V 投影权重、RoPE 位置编码和输入特征，
+            经过优化后的、支持 batch 的多头注意力实现计算得到的输出张量。
     """
-    raise NotImplementedError
+    multi_head_self_attention = MultiHeadSelfAttention(
+            d_model=d_model, 
+            num_heads=num_heads,
+            use_rope=True,
+            max_seq_len=max_seq_len,
+            theta=theta,
+        )
+    
+    multi_head_self_attention.q_proj.weight.data = q_proj_weight
+    multi_head_self_attention.k_proj.weight.data = k_proj_weight
+    multi_head_self_attention.v_proj.weight.data = v_proj_weight
+    multi_head_self_attention.o_proj.weight.data = o_proj_weight
+
+    return multi_head_self_attention(in_features, token_positions) 
 
 
 def run_rope(
