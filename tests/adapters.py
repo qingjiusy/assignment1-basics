@@ -21,7 +21,8 @@ from cs336_basics.cross_entropy import cross_entropy
 from cs336_basics.attention import scaled_dot_product_attention
 from cs336_basics.rope import RotaryPositionalEmbedding
 from cs336_basics.multi_head_self_attention import MultiHeadSelfAttention
-
+from cs336_basics.transformer_block import TransformerBlock
+from cs336_basics.transformer_lm import TransformerLM
 
 def run_linear(
     d_in: int,
@@ -195,7 +196,7 @@ def run_multihead_self_attention(
     multi_head_self_attention.q_proj.weight.data = q_proj_weight
     multi_head_self_attention.k_proj.weight.data = k_proj_weight
     multi_head_self_attention.v_proj.weight.data = v_proj_weight
-    multi_head_self_attention.o_proj.weight.data = o_proj_weight
+    multi_head_self_attention.output_proj.weight.data = o_proj_weight
 
     return multi_head_self_attention(in_features) 
 
@@ -271,11 +272,11 @@ def run_multihead_self_attention_with_rope(
             max_seq_len=max_seq_len,
             theta=theta,
         )
-    
+
     multi_head_self_attention.q_proj.weight.data = q_proj_weight
     multi_head_self_attention.k_proj.weight.data = k_proj_weight
     multi_head_self_attention.v_proj.weight.data = v_proj_weight
-    multi_head_self_attention.o_proj.weight.data = o_proj_weight
+    multi_head_self_attention.output_proj.weight.data = o_proj_weight
 
     return multi_head_self_attention(in_features, token_positions) 
 
@@ -315,68 +316,140 @@ def run_transformer_block(
     in_features: Float[Tensor, " batch sequence_length d_model"],
 ) -> Float[Tensor, " batch sequence_length d_model"]:
     """
-    Given the weights of a pre-norm Transformer block and input features,
-    return the output of running the Transformer block on the input features.
+    给定一个 **Pre-Norm Transformer Block** 的权重和输入特征，返回该 Transformer Block 对输入特征进行前向计算后的输出。
 
-    This function should use RoPE.
-    Depending on your implementation, you may simply need to pass the relevant args
-    to your TransformerBlock constructor, or you may need to initialize your own RoPE
-    class and pass that instead.
+    本函数应使用 **RoPE（Rotary Positional Embedding）**。
 
-    Args:
-        d_model (int): The dimensionality of the Transformer block input.
-        num_heads (int): Number of heads to use in multi-headed attention. `d_model` must be
-            evenly divisible by `num_heads`.
-        d_ff (int): Dimensionality of the feed-forward inner layer.
-        max_seq_len (int): Maximum sequence length to pre-cache if your implementation does that.
-        theta (float): RoPE parameter.
+    根据你的实现方式，你可能只需要将相关参数传递给 `TransformerBlock` 的构造函数；或者你也可能需要自己初始化一个 RoPE 类，并将其传入 TransformerBlock。
+
+    参数：
+        d_model (int):
+            Transformer Block 输入的特征维度。
+
+        num_heads (int):
+            多头注意力（Multi-Head Attention）的头数。
+            `d_model` 必须能够被 `num_heads` 整除。
+
+        d_ff (int):
+            前馈网络（Feed-Forward Network，FFN）隐藏层的维度。
+
+        max_seq_len (int):
+            最大序列长度。
+            如果你的实现会预先缓存 RoPE 等信息，则缓存长度应为该值。
+
+        theta (float):
+            RoPE 的参数 θ。
+
         weights (dict[str, Tensor]):
-            State dict of our reference implementation.
-            The keys of this dictionary are:
+            官方参考实现（reference implementation）的 state_dict。
+
+            字典中包含以下权重：
+
             - `attn.q_proj.weight`
-                The query projections for all `num_heads` attention heads.
-                Shape is (d_model, d_model).
-                The rows are ordered by matrices of shape (num_heads, d_k),
-                so `attn.q_proj.weight == torch.cat([q_heads.0.weight, ..., q_heads.N.weight], dim=0)`.
+                所有 `num_heads` 个注意力头的 Query 投影矩阵。
+
+                形状：
+                    (d_model, d_model)
+
+                这些行按照每个 Head 的权重依次拼接排列，即：
+
+                    attn.q_proj.weight ==
+                    torch.cat([q_heads.0.weight,
+                            ...,
+                            q_heads.N.weight], dim=0)
+
             - `attn.k_proj.weight`
-                The key projections for all `num_heads` attention heads.
-                Shape is (d_model, d_model).
-                The rows are ordered by matrices of shape (num_heads, d_k),
-                so `attn.k_proj.weight == torch.cat([k_heads.0.weight, ..., k_heads.N.weight], dim=0)`.
+                所有注意力头的 Key 投影矩阵。
+
+                形状：
+                    (d_model, d_model)
+
+                排列方式同样是：
+
+                    attn.k_proj.weight ==
+                    torch.cat([k_heads.0.weight,
+                            ...,
+                            k_heads.N.weight], dim=0)
+
             - `attn.v_proj.weight`
-                The value projections for all `num_heads` attention heads.
-                Shape is (d_model, d_model).
-                The rows are ordered by matrices of shape (num_heads, d_v),
-                so `attn.v_proj.weight == torch.cat([v_heads.0.weight, ..., v_heads.N.weight], dim=0)`.
+                所有注意力头的 Value 投影矩阵。
+
+                形状：
+                    (d_model, d_model)
+
+                排列方式：
+
+                    attn.v_proj.weight ==
+                    torch.cat([v_heads.0.weight,
+                            ...,
+                            v_heads.N.weight], dim=0)
+
             - `attn.output_proj.weight`
-                Weight of the multi-head self-attention output projection
-                Shape is (d_model, d_model).
+                多头自注意力输出投影（Output Projection）的权重。
+
+                形状：
+                    (d_model, d_model)
+
             - `ln1.weight`
-                Weights of affine transform for the first RMSNorm
-                applied in the transformer block.
-                Shape is (d_model,).
+                Transformer Block 中第一个 RMSNorm 的缩放参数（affine weight）。
+
+                形状：
+                    (d_model,)
+
             - `ffn.w1.weight`
-                Weight of the first linear transformation in the FFN.
-                Shape is (d_ff, d_model).
+                FFN 第一层线性变换的权重。
+
+                形状：
+                    (d_ff, d_model)
+
             - `ffn.w2.weight`
-                Weight of the second linear transformation in the FFN.
-                Shape is (d_model, d_ff).
+                FFN 第二层线性变换的权重。
+
+                形状：
+                    (d_model, d_ff)
+
             - `ffn.w3.weight`
-                Weight of the third linear transformation in the FFN.
-                Shape is (d_ff, d_model).
+                FFN 第三层线性变换的权重。
+
+                形状：
+                    (d_ff, d_model)
+
             - `ln2.weight`
-                Weights of affine transform for the second RMSNorm
-                applied in the transformer block.
-                Shape is (d_model,).
+                Transformer Block 中第二个 RMSNorm 的缩放参数（affine weight）。
+
+                形状：
+                    (d_model,)
+
         in_features (Float[Tensor, "batch sequence_length d_model"]):
-            Tensor to run your implementation on.
+            需要输入到你的 Transformer Block 实现中的张量。
 
-    Returns:
-        Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
-        running the Transformer block on the input features while using RoPE.
+    返回：
+        Float[Tensor, "batch sequence_length d_model"]
+
+        返回 Transformer Block 前向传播后的输出张量。
     """
-    raise NotImplementedError
+    transformer_block = TransformerBlock(
+        d_model=d_model,
+        num_heads=num_heads, 
+        d_ff=d_ff,
+        max_seq_len=max_seq_len, 
+        theta=theta,
+    )
 
+    # transformer_block.attn.q_proj.weight.data = weights["attn.q_proj.weight"]
+    # transformer_block.attn.k_proj.weight.data = weights["attn.k_proj.weight"]
+    # transformer_block.attn.v_proj.weight.data = weights["attn.v_proj.weight"]
+    # transformer_block.attn.o_proj.weight.data = weights["attn.output_proj.weight"]
+    
+    # transformer_block.ln1.weight.data = weights["ln1.weight"]
+    # transformer_block.ln2.weight.data = weights["ln2.weight"]
+    
+    # transformer_block.ffn.w1.weight.data = weights["ffn.w1.weight"]
+    # transformer_block.ffn.w2.weight.data = weights["ffn.w2.weight"]
+    # transformer_block.ffn.w3.weight.data = weights["ffn.w3.weight"]
+    transformer_block.load_state_dict(weights)
+
+    return transformer_block(in_features)
 
 def run_transformer_lm(
     vocab_size: int,
@@ -389,75 +462,168 @@ def run_transformer_lm(
     weights: dict[str, Tensor],
     in_indices: Int[Tensor, " batch_size sequence_length"],
 ) -> Float[Tensor, " batch_size sequence_length vocab_size"]:
-    """Given the weights of a Transformer language model and input indices,
-    return the output of running a forward pass on the input indices.
+    """给定一个 Transformer 语言模型的权重以及输入 token 的索引，
+    返回该模型对输入执行一次前向传播（forward pass）的输出。
 
-    This function should use RoPE.
+    该函数应使用 RoPE（Rotary Positional Embedding，旋转位置编码）。
 
-    Args:
-        vocab_size (int): The number of unique items in the output vocabulary to be predicted.
-        context_length (int): The maximum number of tokens to process at once.
-        d_model (int): The dimensionality of the model embeddings and sublayer outputs.
-        num_layers (int): The number of Transformer layers to use.
-        num_heads (int): Number of heads to use in multi-headed attention. `d_model` must be
-            evenly divisible by `num_heads`.
-        d_ff (int): Dimensionality of the feed-forward inner layer (section 3.3).
-        rope_theta (float): The RoPE $\\Theta$ parameter.
-        weights (dict[str, Tensor]):
-            State dict of our reference implementation. {num_layers} refers to an
-            integer between `0` and `num_layers - 1` (the layer index).
-            The keys of this dictionary are:
-            - `token_embeddings.weight`
-                Token embedding matrix. Shape is (vocab_size, d_model).
-            - `layers.{num_layers}.attn.q_proj.weight`
-                The query projections for all `num_heads` attention heads.
-                Shape is (num_heads * (d_model / num_heads), d_model).
-                The rows are ordered by matrices of shape (num_heads, d_k),
-                so `attn.q_proj.weight == torch.cat([q_heads.0.weight, ..., q_heads.N.weight], dim=0)`.
-            - `layers.{num_layers}.attn.k_proj.weight`
-                The key projections for all `num_heads` attention heads.
-                Shape is (num_heads * (d_model / num_heads), d_model).
-                The rows are ordered by matrices of shape (num_heads, d_k),
-                so `attn.k_proj.weight == torch.cat([k_heads.0.weight, ..., k_heads.N.weight], dim=0)`.
-            - `layers.{num_layers}.attn.v_proj.weight`
-                The value projections for all `num_heads` attention heads.
-                Shape is (num_heads * (d_model / num_heads), d_model).
-                The rows are ordered by matrices of shape (num_heads, d_v),
-                so `attn.v_proj.weight == torch.cat([v_heads.0.weight, ..., v_heads.N.weight], dim=0)`.
-            - `layers.{num_layers}.attn.output_proj.weight`
-                Weight of the multi-head self-attention output projection
-                Shape is ((d_model / num_heads) * num_heads, d_model).
-            - `layers.{num_layers}.ln1.weight`
-                Weights of affine transform for the first RMSNorm
-                applied in the transformer block.
-                Shape is (d_model,).
-            - `layers.{num_layers}.ffn.w1.weight`
-                Weight of the first linear transformation in the FFN.
-                Shape is (d_ff, d_model).
-            - `layers.{num_layers}.ffn.w2.weight`
-                Weight of the second linear transformation in the FFN.
-                Shape is (d_model, d_ff).
-            - `layers.{num_layers}.ffn.w3.weight`
-                Weight of the third linear transformation in the FFN.
-                Shape is (d_ff, d_model).
-            - `layers.{num_layers}.ln2.weight`
-                Weights of affine transform for the second RMSNorm
-                applied in the transformer block.
-                Shape is (d_model,).
-            - `ln_final.weight`
-                Weights of affine transform for RMSNorm applied to the output of the final transformer block.
-                Shape is (d_model, ).
-            - `lm_head.weight`
-                Weights of the language model output embedding.
-                Shape is (vocab_size, d_model).
-        in_indices (Int[Tensor, "batch_size sequence_length"]) Tensor with input indices to run the language model on. Shape is (batch_size, sequence_length), where
-            `sequence_length` is at most `context_length`.
+    参数：
+        vocab_size (int)：
+            输出词表（vocabulary）的大小，即需要预测的 token 种类数。
 
-    Returns:
-        Float[Tensor, "batch_size sequence_length vocab_size"]: Tensor with the predicted unnormalized
-        next-word distribution for each token.
+        context_length (int)：
+            模型一次最多能够处理的 token 数（上下文长度）。
+
+        d_model (int)：
+            模型 embedding 和各子层输出的维度。
+
+        num_layers (int)：
+            Transformer Block 的层数。
+
+        num_heads (int)：
+            多头注意力（Multi-Head Attention）的头数。
+            要求 d_model 能够被 num_heads 整除。
+
+        d_ff (int)：
+            前馈网络（Feed-Forward Network，论文 3.3 节）隐藏层的维度。
+
+        rope_theta (float)：
+            RoPE 的 θ 参数。
+
+        weights (dict[str, Tensor])：
+            参考实现的 state_dict。
+
+            其中 {num_layers} 表示一个介于
+            0 到 num_layers-1 之间的整数（即层编号）。
+
+            字典中包含以下键：
+
+            - token_embeddings.weight
+                Token Embedding 矩阵。
+                形状：(vocab_size, d_model)
+
+            - layers.{i}.attn.q_proj.weight
+                所有注意力头（num_heads）的 Query 投影矩阵。
+                形状：
+                    (num_heads × (d_model / num_heads), d_model)
+
+                每个 head 的权重按行拼接，因此：
+
+                    attn.q_proj.weight ==
+                    torch.cat(
+                        [q_heads.0.weight,
+                        ...,
+                        q_heads.N.weight],
+                        dim=0
+                    )
+
+            - layers.{i}.attn.k_proj.weight
+                所有注意力头的 Key 投影矩阵。
+                形状：
+                    (num_heads × (d_model / num_heads), d_model)
+
+                排列方式与 q_proj 相同：
+
+                    attn.k_proj.weight ==
+                    torch.cat(
+                        [k_heads.0.weight,
+                        ...,
+                        k_heads.N.weight],
+                        dim=0
+                    )
+
+            - layers.{i}.attn.v_proj.weight
+                所有注意力头的 Value 投影矩阵。
+                形状：
+                    (num_heads × (d_model / num_heads), d_model)
+
+                排列方式与 q_proj 相同：
+
+                    attn.v_proj.weight ==
+                    torch.cat(
+                        [v_heads.0.weight,
+                        ...,
+                        v_heads.N.weight],
+                        dim=0
+                    )
+
+            - layers.{i}.attn.output_proj.weight
+                多头自注意力输出投影层（Output Projection）的权重。
+
+                形状：
+                    ((d_model / num_heads) × num_heads, d_model)
+
+            - layers.{i}.ln1.weight
+                Transformer Block 中第一个 RMSNorm 的可学习缩放参数（affine transform）。
+
+                形状：
+                    (d_model,)
+
+            - layers.{i}.ffn.w1.weight
+                FFN 第一层线性变换权重。
+
+                形状：
+                    (d_ff, d_model)
+
+            - layers.{i}.ffn.w2.weight
+                FFN 第二层线性变换权重。
+
+                形状：
+                    (d_model, d_ff)
+
+            - layers.{i}.ffn.w3.weight
+                FFN 第三层线性变换权重。
+
+                形状：
+                    (d_ff, d_model)
+
+            - layers.{i}.ln2.weight
+                Transformer Block 中第二个 RMSNorm 的可学习缩放参数。
+
+                形状：
+                    (d_model,)
+
+            - ln_final.weight
+                最后一个 Transformer Block 输出之后所使用 RMSNorm 的可学习缩放参数。
+
+                形状：
+                    (d_model,)
+
+            - lm_head.weight
+                语言模型输出层（LM Head）的权重。
+
+                形状：
+                    (vocab_size, d_model)
+
+        in_indices (Int[Tensor, "batch_size sequence_length"])：
+            输入 token 的索引张量。
+
+            形状：
+                (batch_size, sequence_length)
+
+            其中 sequence_length 不超过 context_length。
+
+    返回：
+        Float[Tensor, "batch_size sequence_length vocab_size"]
+
+        返回每个位置预测的下一个 token 的未归一化分数（logits）。
+
+        输出形状：
+            (batch_size, sequence_length, vocab_size)
     """
-    raise NotImplementedError
+    transformer_lM = TransformerLM(
+        vocab_size=vocab_size, 
+        context_length=context_length, 
+        d_model=d_model,
+        num_layers=num_layers, 
+        num_heads=num_heads, 
+        d_ff=d_ff, 
+        rope_theta=rope_theta,
+    )
+
+    transformer_lM.load_state_dict(weights)
+    return transformer_lM(in_indices)
+
 
 
 def run_rmsnorm(

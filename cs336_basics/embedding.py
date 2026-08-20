@@ -13,5 +13,5 @@ class Embedding(nn.Module):
         # step 3: 用 token_ids 作为“行下标”索引 self.weight
         #   —— 高级索引：weight[<某个整型张量>] 会一次取出所有对应行
         #   自问：返回的 shape 是不是 token_ids.shape + (d_model,)？
-        # return ...
+        #  整数张量索引！
         return self.weight[token_ids]

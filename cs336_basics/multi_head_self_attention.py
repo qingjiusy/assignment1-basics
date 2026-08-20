@@ -16,11 +16,11 @@ class MultiHeadSelfAttention(nn.Module):
         self.use_rope = use_rope
 
         # 先想清楚: d_head = d_model // num_heads
-        # step 1: 建 4 个投影 q_proj / k_proj / v_proj / o_proj —— 每个都是 (d_model, d_model)的线性层（复用你写的 Linear）。self.q_proj = ...  ...  self.o_proj = ...
+        # step 1: 建 4 个投影 q_proj / k_proj / v_proj / output_proj —— 每个都是 (d_model, d_model)的线性层（复用你写的 Linear）。self.q_proj = ...  ...  self.o_proj = ...
         self.q_proj = Linear(d_model, d_model)
         self.k_proj = Linear(d_model, d_model)
         self.v_proj = Linear(d_model, d_model)
-        self.o_proj = Linear(d_model, d_model)
+        self.output_proj = Linear(d_model, d_model)
 
         # step 2:（use_rope 时）准备一个 RoPE 模块，作用在每个头的 d_head 维上
         if(self.use_rope):
@@ -40,7 +40,10 @@ class MultiHeadSelfAttention(nn.Module):
         v = rearrange(v, "... seq (num_heads d_head) -> ... num_heads seq d_head", num_heads = self.num_heads, d_head = self.d_head) 
 
         # step 3:（use_rope 时）对 q, k 施加 RoPE（复用你写的 RoPE；注意作用在 d_head 维）
+        # token_positions:(..., seq)
         if(self.use_rope):
+            if(token_positions == None):
+                token_positions = torch.ones(q.shape[:-1], dtype=torch.long) * torch.arange(q.shape[-2], dtype=torch.long)
             q = self.RoPE(q, token_positions)
             k = self.RoPE(k, token_positions)
 
@@ -54,6 +57,6 @@ class MultiHeadSelfAttention(nn.Module):
         # step 6: 拼头 —— 把 (num_heads, d_head) 拼回 d_model
         attn = rearrange(attn, "... num_heads seq d_head -> ... seq (num_heads d_head)") # (..., seq, d_model)
 
-        # step 7: 过输出投影 o_proj 并返回
-        # 过输出投影 o_proj是为了让不同 head 的信息发生融合。下一层就可以收到已经混合好的表示。
-        return self.o_proj(attn)
+        # step 7: 过输出投影 output_proj 并返回
+        # 过输出投影 output_proj 是为了让不同 head 的信息发生融合。下一层就可以收到已经混合好的表示。
+        return self.output_proj(attn)
