@@ -23,6 +23,9 @@ from cs336_basics.rope import RotaryPositionalEmbedding
 from cs336_basics.multi_head_self_attention import MultiHeadSelfAttention
 from cs336_basics.transformer_block import TransformerBlock
 from cs336_basics.transformer_lm import TransformerLM
+from cs336_basics.adamw import AdamW
+from cs336_basics.lr_cosine_schedule import get_lr_cosine_schedule
+from cs336_basics.gradient_clipping import gradient_clipping
 
 def run_linear(
     d_in: int,
@@ -735,22 +738,22 @@ def run_cross_entropy(
 
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
-    """Given a set of parameters, clip their combined gradients to have l2 norm at most max_l2_norm.
+    """给定一组参数，对它们的**整体梯度（combined gradients）**进行裁剪，使其 L2 范数最大不超过 max_l2_norm。
 
-    Args:
-        parameters (Iterable[torch.nn.Parameter]): collection of trainable parameters.
-        max_l2_norm (float): a positive value containing the maximum l2-norm.
+    参数（Args）：
 
-    The gradients of the parameters (parameter.grad) should be modified in-place.
+    * parameters (Iterable[torch.nn.Parameter])：一组可训练参数。
+    * max_l2_norm (float)：一个正数，表示允许的最大 L2 范数。
+
+    参数的梯度（parameter.grad）应该进行原地修改（in-place）。
     """
-    raise NotImplementedError
-
+    gradient_clipping(parameters = parameters, max_l2_norm = max_l2_norm)
 
 def get_adamw_cls() -> Any:
     """
-    Returns a torch.optim.Optimizer that implements AdamW.
+    返回一个实现了 AdamW 算法的 torch.optim.Optimizer 优化器。
     """
-    raise NotImplementedError
+    return AdamW
 
 
 def run_get_lr_cosine_schedule(
@@ -760,25 +763,22 @@ def run_get_lr_cosine_schedule(
     warmup_iters: int,
     cosine_cycle_iters: int,
 ):
-    """
-    Given the parameters of a cosine learning rate decay schedule (with linear
-    warmup) and an iteration number, return the learning rate at the given
-    iteration under the specified schedule.
+    r"""
+    给定**余弦学习率衰减调度（包含线性 warmup）**的参数以及一个迭代次数，返回在指定学习率调度下，该次迭代对应的学习率。
 
-    Args:
-        it (int): Iteration number to get learning rate for.
-        max_learning_rate (float): alpha_max, the maximum learning rate for
-            cosine learning rate schedule (with warmup).
-        min_learning_rate (float): alpha_min, the minimum / final learning rate for
-            the cosine learning rate schedule (with warmup).
-        warmup_iters (int): T_w, the number of iterations to linearly warm-up
-            the learning rate.
-        cosine_cycle_iters (int): T_c, the number of cosine annealing iterations.
+    参数（Args）：
 
-    Returns:
-        Learning rate at the given iteration under the specified schedule.
+    * it (int)：要获取学习率的迭代次数。
+    * max_learning_rate (float)：\alpha_{\max}，余弦学习率调度（包含 warmup）中的最大学习率。
+    * min_learning_rate (float)：\alpha_{\min}，余弦学习率调度（包含 warmup）中的最小/最终学习率。
+    * warmup_iters (int)：T_w，学习率进行线性 warmup 的迭代次数。
+    * cosine_cycle_iters (int)：T_c，余弦退火结束时的 iteration 编号。
+
+    返回值（Returns）：
+
+    返回在指定学习率调度下，给定迭代次数所对应的学习率。
     """
-    raise NotImplementedError
+    return get_lr_cosine_schedule(it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
 
 
 def run_save_checkpoint(
