@@ -26,6 +26,8 @@ from cs336_basics.transformer_lm import TransformerLM
 from cs336_basics.adamw import AdamW
 from cs336_basics.lr_cosine_schedule import get_lr_cosine_schedule
 from cs336_basics.gradient_clipping import gradient_clipping
+from cs336_basics.get_batch import get_batch
+from cs336_basics.checkpoint import save_checkpoint, load_checkpoint
 
 def run_linear(
     d_in: int,
@@ -677,23 +679,31 @@ def run_get_batch(
     dataset: npt.NDArray, batch_size: int, context_length: int, device: str
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
-    Given a dataset (a 1D numpy array of integers) and a desired batch size and
-    context length, sample language modeling input sequences and their corresponding
-    labels from the dataset.
+    给定一个数据集（由整数组成的一维 NumPy 数组）、期望的 batch 大小以及上下文长度，
+    从数据集中采样用于语言模型训练的输入序列，以及与这些输入序列对应的标签。
 
-    Args:
-        dataset (np.array): 1D numpy array of integer token IDs in the dataset.
-        batch_size (int): Desired batch size to sample.
-        context_length (int): Desired context length of each sampled example.
-        device (str): PyTorch device string (e.g., 'cpu' or 'cuda:0') indicating the device
-            to place the sampled input sequences and labels on.
+    参数：
+        dataset (np.array):
+            数据集，由整数 token ID 组成的一维 NumPy 数组。
 
-    Returns:
-        Tuple of torch.LongTensors of shape (batch_size, context_length). The first tuple item
-        is the sampled input sequences, and the second tuple item is the corresponding
-        language modeling labels.
+        batch_size (int):
+            希望采样的 batch 大小。
+
+        context_length (int):
+            每个采样样本所期望的上下文长度。
+
+        device (str):
+            PyTorch 的设备字符串（例如 'cpu' 或 'cuda:0'），
+            表示要将采样得到的输入序列和标签放置在哪个设备上。
+
+    返回：
+        一个由两个 torch.LongTensor 组成的元组，
+        两个 Tensor 的形状均为 (batch_size, context_length)。
+
+        元组中的第一个元素是采样得到的输入序列，
+        第二个元素是与这些输入序列对应的语言模型标签。
     """
-    raise NotImplementedError
+    return get_batch(dataset, batch_size, context_length, device)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
@@ -788,16 +798,20 @@ def run_save_checkpoint(
     out: str | os.PathLike | BinaryIO | IO[bytes],
 ):
     """
-    Given a model, optimizer, and an iteration number, serialize them to disk.
+    给定一个模型、优化器以及迭代次数，将它们序列化并保存到磁盘。
 
-    Args:
-        model (torch.nn.Module): Serialize the state of this model.
-        optimizer (torch.optim.Optimizer): Serialize the state of this optimizer.
-        iteration (int): Serialize this value, which represents the number of training iterations
-            we've completed.
-        out (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialize the model, optimizer, and iteration to.
+    参数：
+    model (torch.nn.Module):
+    对该模型的状态进行序列化。
+
+    optimizer (torch.optim.Optimizer):
+        对该优化器的状态进行序列化。
+    iteration (int):
+        对该值进行序列化。该值表示当前已经完成的训练迭代次数。
+    out (str | os.PathLike | BinaryIO | IO[bytes]):
+        用于保存模型、优化器以及迭代次数的文件路径或类文件对象。
     """
-    raise NotImplementedError
+    save_checkpoint(model, optimizer, iteration, out)
 
 
 def run_load_checkpoint(
@@ -806,19 +820,24 @@ def run_load_checkpoint(
     optimizer: torch.optim.Optimizer,
 ) -> int:
     """
-    Given a serialized checkpoint (path or file-like object), restore the
-    serialized state to the given model and optimizer.
-    Return the number of iterations that we previously serialized in
-    the checkpoint.
+    给定一个已经序列化的 checkpoint（文件路径或类文件对象），将其中序列化保存的状态恢复到给定的模型和优化器中。
 
-    Args:
-        src (str | os.PathLike | BinaryIO | IO[bytes]): Path or file-like object to serialized checkpoint.
-        model (torch.nn.Module): Restore the state of this model.
-        optimizer (torch.optim.Optimizer): Restore the state of this optimizer.
-    Returns:
-        int: the previously-serialized number of iterations.
+    返回之前保存在该 checkpoint 中的训练迭代次数。
+
+    参数：
+    src (str | os.PathLike | BinaryIO | IO[bytes]):
+    已序列化 checkpoint 的文件路径或类文件对象。
+
+    model (torch.nn.Module):
+        将 checkpoint 中保存的模型状态恢复到该模型中。
+    optimizer (torch.optim.Optimizer):
+        将 checkpoint 中保存的优化器状态恢复到该优化器中。
+
+    返回：
+    int:
+    之前序列化并保存在 checkpoint 中的训练迭代次数。
     """
-    raise NotImplementedError
+    return load_checkpoint(src, model, optimizer)
 
 
 def get_tokenizer(
