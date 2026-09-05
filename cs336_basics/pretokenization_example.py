@@ -61,15 +61,12 @@ def find_chunk_boundaries(
 
 
 ## 使用
-with open(..., "rb") as f:
-    num_processes = 4
-    boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
+# with open(..., "rb") as f:
+#     num_processes = 4
+#     boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
-    # 下面是串行实现，但你可以将每一组起始结束位置分配给多个进程，从而实现并行处理。
-    for start, end in zip(boundaries[:-1], boundaries[1:]):
-        f.seek(start)
-        # 读取当前分块的字节数据，并尝试将其解码为 UTF-8 字符串
-        chunk = f.read(end - start).decode("utf-8", errors="ignore")# 表示如果读取到无法按照 UTF-8 解码的字节，就直接忽略这些错误字节，而不是抛出异常
-        
-        
-        # 对当前分块执行预分词，并统计每个预分词单元出现的次数。
+#     # 下面是串行实现，但你可以将每一组起始结束位置分配给多个进程，从而实现并行处理。
+#     for start, end in zip(boundaries[:-1], boundaries[1:]):
+#         f.seek(start)
+#         # 读取当前分块的字节数据，并尝试将其解码为 UTF-8 字符串
+#         chunk = f.read(end - start).decode("utf-8", errors="ignore")# 表示如果读取到无法按照 UTF-8 解码的字节，就直接忽略这些错误字节，而不是抛出异常

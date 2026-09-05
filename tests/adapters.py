@@ -29,6 +29,7 @@ from cs336_basics.gradient_clipping import gradient_clipping
 from cs336_basics.get_batch import get_batch
 from cs336_basics.checkpoint import save_checkpoint, load_checkpoint
 from cs336_basics.tokenizer import Tokenizer
+from cs336_basics.train_bpe_mulitprocess import train_bpe_multiprocess
 
 def run_linear(
     d_in: int,
@@ -901,5 +902,8 @@ def run_train_bpe(
         （<token1>, <token2>），表示将 <token1> 与 <token2> 合并。
         合并规则按照它们被创建的先后顺序排列。
     """
+    # 这个是单进程写法
+    # return train_bpe(input_path, vocab_size, special_tokens)
 
-    return train_bpe(input_path, vocab_size, special_tokens)
+    # 多进程写法
+    return train_bpe_multiprocess(input_path, vocab_size, special_tokens)
