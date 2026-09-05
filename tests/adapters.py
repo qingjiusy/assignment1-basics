@@ -28,6 +28,7 @@ from cs336_basics.lr_cosine_schedule import get_lr_cosine_schedule
 from cs336_basics.gradient_clipping import gradient_clipping
 from cs336_basics.get_batch import get_batch
 from cs336_basics.checkpoint import save_checkpoint, load_checkpoint
+from cs336_basics.tokenizer import Tokenizer
 
 def run_linear(
     d_in: int,
@@ -845,22 +846,31 @@ def get_tokenizer(
     merges: list[tuple[bytes, bytes]],
     special_tokens: list[str] | None = None,
 ) -> Any:
-    """Given a vocabulary, a list of merges, and a list of special tokens,
-    return a BPE tokenizer that uses the provided vocab, merges, and special tokens.
-
-    Args:
-        vocab (dict[int, bytes]): The tokenizer vocabulary, a mapping from int (token ID in the vocabulary)
-            to bytes (token bytes)
-        merges (list[tuple[bytes, bytes]]): BPE merges. Each list item is a tuple of bytes (<token1>, <token2>),
-            representing that <token1> was merged with <token2>.
-            Merges are ordered by order of creation.
-        special_tokens (list[str] | None): A list of string special tokens for the tokenizer. These strings will never
-            be split into multiple tokens, and will always be kept as a single token.
-
-    Returns:
-        A BPE tokenizer that uses the provided vocab, merges, and special tokens.
     """
-    raise NotImplementedError
+    给定一个词表（vocabulary）、一个 BPE 合并规则列表（merges）以及一个特殊 token 列表（special tokens），
+    返回一个使用所提供的 vocab、merges 和 special tokens 的 BPE tokenizer（分词器）。
+
+    参数：
+        vocab (dict[int, bytes]):
+            tokenizer 的词表。
+            它是一个从 int（词表中的 token ID）到 bytes（token 对应的字节序列）的映射。
+
+        merges (list[tuple[bytes, bytes]]):
+            BPE 的合并规则。
+            列表中的每一项都是一个 bytes 元组 (<token1>, <token2>)，
+            表示 <token1> 曾经与 <token2> 合并。
+
+            merges 按照这些合并规则被创建的先后顺序排列。
+
+        special_tokens (list[str] | None):
+            tokenizer 的特殊 token 字符串列表。
+            这些字符串永远不会被拆分成多个 token，
+            而是始终作为一个完整的 token 保留下来。
+
+    返回：
+        一个使用给定 vocab、merges 和 special tokens 的 BPE tokenizer。
+    """
+    return Tokenizer(vocab, merges, special_tokens)
 
 
 def run_train_bpe(
